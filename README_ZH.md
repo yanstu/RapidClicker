@@ -8,11 +8,11 @@ RapidClicker 的最大亮点是常驻后台，无需记忆快捷键或提前打�
 
 ## 程序截图
 
-![image-20250521111327437](E:/Personal/Project/RapidClicker/screenshot/系统托盘.png)
+![image-20250521111327437](./screenshot/系统托盘.png)
 
 **系统托盘**
 
-![image-20250521111403943](E:/Personal/Project/RapidClicker/screenshot/设置.png)
+![image-20250521111403943](./screenshot/设置.png)
 
 **设置界面**
 
