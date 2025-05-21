@@ -2,7 +2,19 @@
 
 A lightweight automatic mouse clicking tool for Windows.
 
+The standout feature of RapidClicker is that it runs in the background. No need to remember shortcuts or open settings. Just double - click the left mouse button to the default times and hold it down to auto - click.
+
 [中文文档](README_ZH.md)
+
+## Screenshot
+
+![image-20250521111327437](./screenshot/tray.png)
+
+**Tray**
+
+![image-20250521111403943](./screenshot/settings.png)
+
+**Settings**
 
 ## Features
 
@@ -27,16 +39,10 @@ A lightweight automatic mouse clicking tool for Windows.
 
 ## Installation
 
-### Method 1: Download the Installer
-
-1. Go to the [Releases page](https://github.com/yanstu/RapidClicker/releases)
-2. Download the latest version of RapidClicker
-3. Run the installer and follow the instructions
-
 ### Method 2: Download Standalone Executable
 
 1. Go to the [Releases page](https://github.com/yanstu/RapidClicker/releases)
-2. Download `RapidClicker_OneFile.exe`
+2. Download `RapidClicker.exe`
 3. Run the executable (no installation required)
 
 ## Configuration

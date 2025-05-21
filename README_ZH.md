@@ -2,7 +2,19 @@
 
 一个轻量级的Windows自动鼠标连点工具。
 
+RapidClicker 的最大亮点是常驻后台，无需记忆快捷键或提前打开设置。只需按默认配置连续点击鼠标左键达到设定次数后长按，即可自动连点，让操作更顺畅。
+
 [English](README.md)
+
+## 程序截图
+
+![image-20250521111327437](E:/Personal/Project/RapidClicker/screenshot/系统托盘.png)
+
+**系统托盘**
+
+![image-20250521111403943](E:/Personal/Project/RapidClicker/screenshot/设置.png)
+
+**设置界面**
 
 ## 功能特点
 
@@ -27,16 +39,8 @@
 
 ## 安装方法
 
-### 方法一：下载安装程序
-
 1. 前往[发布页面](https://github.com/yanstu/RapidClicker/releases)
-2. 下载最新版本的RapidClicker
-3. 运行安装程序并按照说明进行操作
-
-### 方法二：下载独立可执行文件
-
-1. 前往[发布页面](https://github.com/yanstu/RapidClicker/releases)
-2. 下载`RapidClicker_OneFile.exe`
+2. 下载`RapidClicker.exe`
 3. 运行可执行文件（无需安装）
 
 ## 配置选项
