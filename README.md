@@ -1,6 +1,7 @@
 # RapidClicker
 
 A lightweight automatic mouse clicking tool for Windows.
+
 The standout feature of RapidClicker is that it runs in the background. No need to remember shortcuts or open settings. Just double - click the left mouse button to the default times and hold it down to auto - click.
 
 [中文文档](README_ZH.md)
