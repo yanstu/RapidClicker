@@ -1,0 +1,4 @@
+PyQt5==5.15.9
+pynput==1.7.6
+pywin32==306
+pyinstaller==6.1.0 
