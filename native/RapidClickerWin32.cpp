@@ -5,6 +5,7 @@
 #include <shellapi.h>
 #include <shlobj.h>
 #include <commctrl.h>
+#include <atomic>
 #include <string>
 #include <deque>
 #include <fstream>
@@ -23,7 +24,6 @@ constexpr wchar_t kAboutClassName[] = L"RapidClickerAboutClass";
 constexpr wchar_t kConfigFileName[] = L".rapidclicker.json";
 constexpr UINT kTrayIconId = 1001;
 constexpr UINT kTrayCallbackMessage = WM_APP + 1;
-constexpr UINT_PTR kAutoClickTimerId = 2001;
 constexpr UINT kStartAutoClickMessage = WM_APP + 2;
 constexpr UINT kStopAutoClickMessage = WM_APP + 3;
 constexpr UINT kMenuSettings = 3001;
@@ -49,6 +49,8 @@ constexpr int kGithubLink = 5002;
 constexpr int kSettingsInfoText = 4103;
 constexpr int kAboutVersionValue = 5106;
 constexpr int kAboutAuthorValue = 5107;
+constexpr ULONG_PTR kInjectedClickMarker = static_cast<ULONG_PTR>(0x52434C4B);
+constexpr DWORD kAutoClickThreadJoinTimeoutMs = 1000;
 
 HFONT g_ui_font = nullptr;
 HFONT g_ui_font_bold = nullptr;
@@ -159,11 +161,12 @@ HWND g_settings_window = nullptr;
 HWND g_about_window = nullptr;
 HHOOK g_mouse_hook = nullptr;
 HANDLE g_mutex = nullptr;
+HANDLE g_auto_click_thread = nullptr;
+HANDLE g_auto_click_stop_event = nullptr;
 NOTIFYICONDATAW g_notify_icon{};
 std::deque<ULONGLONG> g_press_times;
-bool g_button_held = false;
-bool g_auto_clicking = false;
-bool g_program_clicking = false;
+std::atomic<bool> g_button_held{false};
+std::atomic<bool> g_auto_clicking{false};
 ULONGLONG g_last_press_tick = 0;
 
 const Translations& Tr()
@@ -731,22 +734,135 @@ bool RelaunchAsAdmin()
     return reinterpret_cast<INT_PTR>(result) > 32;
 }
 
-void StopAutoClick(HWND hwnd)
+void CloseKernelHandle(HANDLE& handle)
 {
-    if (g_auto_clicking)
+    if (handle)
     {
-        KillTimer(hwnd, kAutoClickTimerId);
-        g_auto_clicking = false;
-        g_program_clicking = false;
+        CloseHandle(handle);
+        handle = nullptr;
     }
 }
 
-void StartAutoClick(HWND hwnd)
+bool EnsureAutoClickStopEvent()
 {
-    if (!g_auto_clicking)
+    if (g_auto_click_stop_event)
     {
-        SetTimer(hwnd, kAutoClickTimerId, static_cast<UINT>(g_config.auto_click_interval), nullptr);
-        g_auto_clicking = true;
+        return true;
+    }
+
+    g_auto_click_stop_event = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    return g_auto_click_stop_event != nullptr;
+}
+
+void CleanupFinishedAutoClickThread()
+{
+    if (g_auto_click_thread && WaitForSingleObject(g_auto_click_thread, 0) == WAIT_OBJECT_0)
+    {
+        CloseKernelHandle(g_auto_click_thread);
+    }
+}
+
+void PerformClick()
+{
+    INPUT inputs[2]{};
+    inputs[0].type = INPUT_MOUSE;
+    inputs[0].mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
+    inputs[0].mi.dwExtraInfo = kInjectedClickMarker;
+    inputs[1].type = INPUT_MOUSE;
+    inputs[1].mi.dwFlags = MOUSEEVENTF_LEFTUP;
+    inputs[1].mi.dwExtraInfo = kInjectedClickMarker;
+
+    SendInput(2, inputs, sizeof(INPUT));
+}
+
+DWORD WINAPI AutoClickThreadProc(LPVOID)
+{
+    HANDLE timer = CreateWaitableTimerW(nullptr, FALSE, nullptr);
+    if (!timer)
+    {
+        g_auto_clicking.store(false);
+        return 1;
+    }
+
+    const int interval_ms = std::clamp(g_config.auto_click_interval, 10, 500);
+    LARGE_INTEGER due_time{};
+    due_time.QuadPart = -static_cast<LONGLONG>(interval_ms) * 10000;
+
+    if (!SetWaitableTimer(timer, &due_time, interval_ms, nullptr, nullptr, FALSE))
+    {
+        CloseHandle(timer);
+        g_auto_clicking.store(false);
+        return 1;
+    }
+
+    HANDLE wait_handles[2]{g_auto_click_stop_event, timer};
+    DWORD exit_code = 0;
+
+    while (true)
+    {
+        const DWORD wait_result = WaitForMultipleObjects(2, wait_handles, FALSE, INFINITE);
+        if (wait_result == WAIT_OBJECT_0)
+        {
+            break;
+        }
+
+        if (wait_result == WAIT_OBJECT_0 + 1)
+        {
+            if (!g_button_held.load())
+            {
+                break;
+            }
+
+            PerformClick();
+            continue;
+        }
+
+        exit_code = 1;
+        break;
+    }
+
+    CancelWaitableTimer(timer);
+    CloseHandle(timer);
+    g_auto_clicking.store(false);
+    return exit_code;
+}
+
+void StopAutoClick()
+{
+    g_auto_clicking.store(false);
+
+    if (g_auto_click_stop_event)
+    {
+        SetEvent(g_auto_click_stop_event);
+    }
+
+    if (g_auto_click_thread)
+    {
+        WaitForSingleObject(g_auto_click_thread, kAutoClickThreadJoinTimeoutMs);
+        CloseKernelHandle(g_auto_click_thread);
+    }
+}
+
+void StartAutoClick()
+{
+    CleanupFinishedAutoClickThread();
+    if (g_auto_clicking.load())
+    {
+        return;
+    }
+
+    if (!EnsureAutoClickStopEvent())
+    {
+        return;
+    }
+
+    ResetEvent(g_auto_click_stop_event);
+    g_auto_clicking.store(true);
+    g_auto_click_thread = CreateThread(nullptr, 0, AutoClickThreadProc, nullptr, 0, nullptr);
+    if (!g_auto_click_thread)
+    {
+        g_auto_clicking.store(false);
+        SetEvent(g_auto_click_stop_event);
     }
 }
 
@@ -761,19 +877,6 @@ bool MeetsRapidClickCondition()
     const ULONGLONG first = g_press_times[start_index];
     const ULONGLONG last = g_press_times.back();
     return last >= first && (last - first) <= static_cast<ULONGLONG>(g_config.trigger_click_interval);
-}
-
-void PerformClick()
-{
-    INPUT inputs[2]{};
-    inputs[0].type = INPUT_MOUSE;
-    inputs[0].mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
-    inputs[1].type = INPUT_MOUSE;
-    inputs[1].mi.dwFlags = MOUSEEVENTF_LEFTUP;
-
-    g_program_clicking = true;
-    SendInput(2, inputs, sizeof(INPUT));
-    g_program_clicking = false;
 }
 
 void SetWindowTextSafe(HWND hwnd, const wchar_t* text)
@@ -829,7 +932,9 @@ LRESULT CALLBACK MouseProc(int code, WPARAM w_param, LPARAM l_param)
     if (code >= 0)
     {
         const auto* info = reinterpret_cast<const MSLLHOOKSTRUCT*>(l_param);
-        if ((info->flags & LLMHF_INJECTED) == 0 || !g_program_clicking)
+        const bool is_program_click =
+            (info->flags & LLMHF_INJECTED) != 0 && info->dwExtraInfo == kInjectedClickMarker;
+        if (!is_program_click)
         {
             if (w_param == WM_LBUTTONDOWN || w_param == WM_LBUTTONUP)
             {
@@ -842,7 +947,7 @@ LRESULT CALLBACK MouseProc(int code, WPARAM w_param, LPARAM l_param)
                         g_press_times.clear();
                     }
 
-                    g_button_held = true;
+                    g_button_held.store(true);
                     g_last_press_tick = now;
                     g_press_times.push_back(now);
                     while (g_press_times.size() > 50)
@@ -857,7 +962,7 @@ LRESULT CALLBACK MouseProc(int code, WPARAM w_param, LPARAM l_param)
                 }
                 else
                 {
-                    g_button_held = false;
+                    g_button_held.store(false);
                     PostMessageW(g_main_window, kStopAutoClickMessage, 0, 0);
                 }
             }
@@ -934,7 +1039,7 @@ void CreateAboutControls(HWND hwnd)
     CreateWindowW(L"STATIC", Tr().about_description, WS_CHILD | WS_VISIBLE | SS_LEFT, margin_x, ScaleForDpi(20), width, ScaleForDpi(40), hwnd, ControlId(5101), g_instance, nullptr);
     CreateWindowW(L"STATIC", Tr().details, WS_CHILD | WS_VISIBLE | SS_LEFT, margin_x, ScaleForDpi(80), ScaleForDpi(120), row_height, hwnd, ControlId(5102), g_instance, nullptr);
     CreateWindowW(L"STATIC", Tr().version, WS_CHILD | WS_VISIBLE | SS_LEFT, margin_x, ScaleForDpi(120), ScaleForDpi(120), row_height, hwnd, ControlId(5103), g_instance, nullptr);
-    CreateWindowW(L"STATIC", L"1.1.0", WS_CHILD | WS_VISIBLE | SS_LEFT, value_x, ScaleForDpi(120), ScaleForDpi(240), row_height, hwnd, ControlId(kAboutVersionValue), g_instance, nullptr);
+    CreateWindowW(L"STATIC", L"1.1.1", WS_CHILD | WS_VISIBLE | SS_LEFT, value_x, ScaleForDpi(120), ScaleForDpi(240), row_height, hwnd, ControlId(kAboutVersionValue), g_instance, nullptr);
     CreateWindowW(L"STATIC", Tr().author, WS_CHILD | WS_VISIBLE | SS_LEFT, margin_x, ScaleForDpi(150), ScaleForDpi(120), row_height, hwnd, ControlId(5104), g_instance, nullptr);
     CreateWindowW(L"STATIC", L"yanstu", WS_CHILD | WS_VISIBLE | SS_LEFT, value_x, ScaleForDpi(150), ScaleForDpi(240), row_height, hwnd, ControlId(kAboutAuthorValue), g_instance, nullptr);
     CreateWindowW(L"STATIC", Tr().github, WS_CHILD | WS_VISIBLE | SS_LEFT, margin_x, ScaleForDpi(182), ScaleForDpi(120), row_height, hwnd, ControlId(5105), g_instance, nullptr);
@@ -1210,32 +1315,20 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT message, WPARAM w_param, LPARAM l_p
         break;
     }
     case kStartAutoClickMessage:
-        if (g_button_held)
+        if (g_button_held.load())
         {
-            StartAutoClick(hwnd);
+            StartAutoClick();
         }
         return 0;
     case kStopAutoClickMessage:
-        StopAutoClick(hwnd);
-        return 0;
-    case WM_TIMER:
-        if (w_param == kAutoClickTimerId)
-        {
-            if (!g_button_held)
-            {
-                StopAutoClick(hwnd);
-            }
-            else
-            {
-                PerformClick();
-            }
-        }
+        StopAutoClick();
         return 0;
     case WM_CLOSE:
         DestroyWindow(hwnd);
         return 0;
     case WM_DESTROY:
-        StopAutoClick(hwnd);
+        StopAutoClick();
+        CloseKernelHandle(g_auto_click_stop_event);
         RemoveTrayIcon();
         if (g_mouse_hook)
         {

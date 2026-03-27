@@ -10,7 +10,7 @@ import sys
 
 # 应用基本信息
 APP_NAME = "RapidClicker"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.1.1"
 APP_AUTHOR = "yanstu"
 APP_GITHUB = "https://github.com/yanstu/RapidClicker"
 
