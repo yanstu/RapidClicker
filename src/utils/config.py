@@ -9,6 +9,7 @@ import os
 import json
 import sys
 import winreg
+import subprocess
 from PyQt5.QtCore import QObject, pyqtSignal
 
 from utils.constants import DEFAULT_CONFIG, APP_NAME
@@ -87,32 +88,59 @@ class Config(QObject):
         return self._config.copy()
     
     def _set_auto_start(self, enabled):
-        """设置开机自启动"""
+        """设置开机自启动（管理员模式下改用计划任务）"""
         try:
-            reg_key = winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER,
-                r"Software\Microsoft\Windows\CurrentVersion\Run",
-                0, winreg.KEY_SET_VALUE | winreg.KEY_QUERY_VALUE
-            )
-            
-            if enabled:
-                # 获取当前可执行文件路径
-                if hasattr(sys, '_MEIPASS'):  # PyInstaller打包情况
-                    exe_path = os.path.abspath(sys.argv[0])
-                else:
-                    exe_path = os.path.abspath(sys.executable)
-                
-                print(f"Setting auto start with path: {exe_path}")
-                winreg.SetValueEx(reg_key, APP_NAME, 0, winreg.REG_SZ, f'"{exe_path}"')
-            else:
+            task_name = APP_NAME
+            try:
+                reg_key = winreg.OpenKey(
+                    winreg.HKEY_CURRENT_USER,
+                    r"Software\Microsoft\Windows\CurrentVersion\Run",
+                    0,
+                    winreg.KEY_SET_VALUE,
+                )
                 try:
                     winreg.DeleteValue(reg_key, APP_NAME)
-                except WindowsError:
-                    # 如果注册表项不存在，则忽略
+                except FileNotFoundError:
                     pass
-                    
-            winreg.CloseKey(reg_key)
-            return True
+                finally:
+                    winreg.CloseKey(reg_key)
+            except OSError:
+                pass
+
+            if enabled:
+                if hasattr(sys, '_MEIPASS'):  # PyInstaller打包情况
+                    launch_command = f'"{os.path.abspath(sys.executable)}"'
+                else:
+                    python_exe = os.path.abspath(sys.executable)
+                    entry_script = os.path.abspath(sys.argv[0])
+                    launch_command = f'"{python_exe}" "{entry_script}"'
+
+                command = [
+                    "schtasks",
+                    "/Create",
+                    "/SC", "ONLOGON",
+                    "/TN", task_name,
+                    "/TR", launch_command,
+                    "/RL", "HIGHEST",
+                    "/F",
+                ]
+            else:
+                command = ["schtasks", "/Delete", "/TN", task_name, "/F"]
+
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                check=False,
+            )
+
+            if not enabled and result.returncode == 1:
+                not_found_text = (result.stdout or "") + (result.stderr or "")
+                if "cannot find the file specified" in not_found_text.lower() or "找不到指定的文件" in not_found_text:
+                    return True
+
+            return result.returncode == 0
         except Exception as e:
             print(f"Error setting auto start: {e}")
             return False 

@@ -1,0 +1,9 @@
+#define IDI_APP_ICON 101
+#define IDI_SETTINGS_ICON 102
+#define IDI_ABOUT_ICON 103
+#define IDI_EXIT_ICON 104
+
+IDI_APP_ICON ICON "..\\assets\\app_icon.ico"
+IDI_SETTINGS_ICON ICON "..\\assets\\settings_icon.ico"
+IDI_ABOUT_ICON ICON "..\\assets\\about_icon.ico"
+IDI_EXIT_ICON ICON "..\\assets\\exit_icon.ico"

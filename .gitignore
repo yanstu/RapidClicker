@@ -6,6 +6,7 @@ __pycache__/
 # Distribution / packaging
 dist/
 build/
+build-native/
 *.egg-info/
 *.egg
 
@@ -13,6 +14,7 @@ build/
 *.manifest
 *.spec
 !build.spec
+!native/*.manifest
 
 # Logs
 *.log
@@ -47,3 +49,4 @@ venv.bak/
 Thumbs.db
 ehthumbs.db
 Desktop.ini 
+RapidClickerWin32.obj

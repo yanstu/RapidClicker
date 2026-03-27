@@ -52,8 +52,9 @@ def main():
 
 if __name__ == "__main__":
     # 判断是否需要以管理员权限运行（在某些系统上可能需要）
-    # if not check_admin():
-    #     ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv), None, 1)
-    #     sys.exit(0)
+    if not check_admin():
+        params = " ".join([f'"{arg}"' for arg in sys.argv])
+        ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, params, None, 1)
+        sys.exit(0)
     
     main() 

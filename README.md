@@ -1,8 +1,10 @@
 # RapidClicker
 
-A lightweight automatic mouse clicking tool for Windows.
+RapidClicker is a compact Windows auto clicker built for background use.
 
-The standout feature of RapidClicker is that it runs in the background. No need to remember shortcuts or open settings. Just double - click the left mouse button to the default times and hold it down to auto - click.
+It lives in the system tray, starts with administrator privileges, stays sharp on high-DPI displays, and turns a rapid left-click burst into sustained auto-clicking while you keep holding the button.
+
+The standalone native build is also extremely small: the current release executable is under 1 MB, so it is easy to download, keep around, and launch without an extra runtime.
 
 [中文文档](README_ZH.md)
 
@@ -18,11 +20,11 @@ The standout feature of RapidClicker is that it runs in the background. No need 
 
 ## Features
 
-- Intelligent click detection: automatically detects when you need rapid clicking
-- System tray integration: runs silently in the background
-- Highly configurable: customize trigger conditions and clicking speed
-- Multi-language support: English and Chinese interfaces
-- Small footprint: takes minimal system resources
+- Native Win32 executable with a standalone package under 1 MB
+- Intelligent click detection for trigger-and-hold auto-clicking
+- System tray integration for always-on background use
+- Administrator launch for better compatibility with elevated windows
+- High-DPI aware interface with English and Chinese support
 
 ## How It Works
 
@@ -39,11 +41,11 @@ The standout feature of RapidClicker is that it runs in the background. No need 
 
 ## Installation
 
-### Method 2: Download Standalone Executable
+### Standalone Executable
 
 1. Go to the [Releases page](https://github.com/yanstu/RapidClicker/releases)
 2. Download `RapidClicker.exe`
-3. Run the executable (no installation required)
+3. Run the executable
 
 ## Configuration
 
@@ -53,11 +55,30 @@ Right-click the tray icon and select "Settings" to configure:
 - **Trigger Time Window**: Maximum time window (in milliseconds) for trigger clicks (default: 300ms)
 - **Auto Click Interval**: Time interval between automatic clicks (in milliseconds) (default: 500ms)
 - **Language**: Choose between English and Chinese
-- **Auto Start**: Launch automatically when Windows starts
+- **Auto Start**: Launch through a highest-privilege scheduled task after Windows sign-in
 
 ## Building from Source
 
-### Prerequisites
+### Native Build (Default)
+
+Prerequisites:
+
+- Visual Studio Community / Build Tools with Desktop development with C++
+
+Steps:
+
+1. Run:
+   ```
+   build.bat
+   ```
+2. Find the native application in:
+   ```
+   dist\RapidClicker.exe
+   ```
+
+### Python Build (Legacy Fallback)
+
+Prerequisites:
 
 - Python 3.7 or higher
 - Required packages: see `requirements.txt`
@@ -75,12 +96,12 @@ Right-click the tray icon and select "Settings" to configure:
    pip install -r requirements.txt
    ```
 
-3. Run the build script:
+3. Run the legacy Python build script:
    ```
-   build.bat
+   build-python.bat
    ```
 
-4. Find the built application in the `dist` directory
+4. Find the built Python package in the `dist` directory
 
 ## License
 

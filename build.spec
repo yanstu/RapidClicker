@@ -8,7 +8,80 @@ PyInstaller打包配置文件
 import sys
 import os
 from PyInstaller.building.build_main import Analysis, PYZ, EXE, COLLECT
-from PyInstaller.utils.hooks import collect_submodules
+
+PYQT_QT_PREFIX = os.path.join("PyQt5", "Qt5")
+QT_BIN_DIR = os.path.join(PYQT_QT_PREFIX, "bin")
+QT_PLUGIN_DIR = os.path.join(PYQT_QT_PREFIX, "plugins")
+QT_TRANSLATION_DIR = os.path.join(PYQT_QT_PREFIX, "translations")
+
+WINDOWS_PYNPUT_IMPORTS = [
+    "pynput",
+    "pynput._info",
+    "pynput._util",
+    "pynput._util.win32",
+    "pynput._util.win32_vks",
+    "pynput.mouse",
+    "pynput.mouse._base",
+    "pynput.mouse._win32",
+]
+
+ALLOWED_QT_BINARIES = {
+    "Qt5Core.dll",
+    "Qt5Gui.dll",
+    "Qt5Widgets.dll",
+    "python3.dll",
+    "python39.dll",
+    "qwindows.dll",
+    "qwindowsvistastyle.dll",
+    "qico.dll",
+}
+
+ALLOWED_QT_TRANSLATIONS = {
+    "qt_zh_CN.qm",
+    "qtbase_zh_CN.qm",
+}
+
+EXCLUDED_QT_BINARIES = {
+    "Qt5DBus.dll",
+    "Qt5Network.dll",
+    "Qt5Qml.dll",
+    "Qt5QmlModels.dll",
+    "Qt5Quick.dll",
+    "Qt5Svg.dll",
+    "Qt5WebSockets.dll",
+    "d3dcompiler_47.dll",
+    "libEGL.dll",
+    "libGLESv2.dll",
+    "opengl32sw.dll",
+}
+
+
+def _should_keep_binary(entry):
+    """仅保留 Widgets 桌面应用需要的 Qt 运行时。"""
+    runtime_name = entry[0]
+    src_name = entry[1]
+    normalized_runtime = runtime_name.replace("/", "\\")
+    base_name = os.path.basename(runtime_name)
+
+    if f"{QT_BIN_DIR}\\" in normalized_runtime:
+        return base_name in ALLOWED_QT_BINARIES
+
+    if f"{QT_PLUGIN_DIR}\\" in normalized_runtime:
+        return base_name in ALLOWED_QT_BINARIES
+
+    return os.path.basename(src_name) not in EXCLUDED_QT_BINARIES and base_name not in EXCLUDED_QT_BINARIES
+
+
+def _should_keep_data(entry):
+    """去掉未使用的 Qt 多语言翻译资源。"""
+    runtime_name = entry[0]
+    normalized_runtime = runtime_name.replace("/", "\\")
+    base_name = os.path.basename(runtime_name)
+
+    if f"{QT_TRANSLATION_DIR}\\" in normalized_runtime:
+        return base_name in ALLOWED_QT_TRANSLATIONS
+
+    return True
 
 # 获取Anaconda/Python安装路径中的DLL
 python_dir = os.path.dirname(sys.executable)
@@ -36,7 +109,7 @@ a = Analysis(
     datas=[
         ('assets/*', 'assets'),  # 复制assets目录下的所有文件
     ],
-    hiddenimports=collect_submodules('pynput') + ['win32api', 'win32event', 'ctypes', 'PyQt5.sip'],
+    hiddenimports=WINDOWS_PYNPUT_IMPORTS + ['win32api', 'win32event', 'ctypes', 'PyQt5.sip'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -49,6 +122,9 @@ a = Analysis(
     cipher=None,
     noarchive=False,
 )
+
+a.binaries = [entry for entry in a.binaries if _should_keep_binary(entry)]
+a.datas = [entry for entry in a.datas if _should_keep_data(entry)]
 
 # 创建PYZ归档
 pyz = PYZ(a.pure, a.zipped_data, cipher=None)
@@ -71,7 +147,7 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon='assets/app_icon.ico',
-    uac_admin=False,
+    uac_admin=True,
 )
 
 # 收集所有文件
@@ -108,4 +184,5 @@ exe_onefile = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon='assets/app_icon.ico',
+    uac_admin=True,
 ) 
